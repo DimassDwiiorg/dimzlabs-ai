@@ -5,7 +5,8 @@ const zlib = require('zlib');
 class DimzLabsAI {
     constructor() {
         this.apiUrl = 'https://chateverywhere.app/api/chat';
-        this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+        // User-Agent Chrome Desktop Lengkap & Terbaru
+        this.userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
         this.browserId = this._generateBrowserId();
         this.model = {
             id: 'gpt-3.5-turbo',
@@ -33,14 +34,14 @@ Always structure your answers nicely using Markdown syntax:
 - For comparisons, use standard Markdown tables.
 Do not use weird symbols, decorative ASCII art, or unnecessary characters. Keep it clean, concise, and easy to read.`;
 
-        // Menyusun riwayat percakapan agar AI ingat kontek sebelumnya
+        // Menyusun riwayat percakapan
         const formattedMessages = history.map(msg => ({
             role: msg.sender === 'user' ? 'user' : 'assistant',
             content: msg.text,
             pluginId: null
         }));
 
-        // Tambahkan pesan user terbaru
+        // Pesan user terbaru
         formattedMessages.push({ role: 'user', content: message, pluginId: null });
 
         const payload = {
@@ -63,24 +64,46 @@ Do not use weird symbols, decorative ASCII art, or unnecessary characters. Keep 
                 headers: {
                     'User-Agent': this.userAgent,
                     'Content-Type': 'application/json',
-                    'Accept': 'text/plain',
+                    'Accept': '*/*',
+                    'Accept-Language': 'en-US,en;q=0.9,id;q=0.8',
+                    'Origin': 'https://chateverywhere.app',
+                    'Referer': 'https://chateverywhere.app/',
+                    'Sec-Ch-Ua': '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+                    'Sec-Ch-Ua-Mobile': '?0',
+                    'Sec-Ch-Ua-Platform': '"Windows"',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'same-origin',
                     'user-browser-id': this.browserId,
                     'Content-Length': Buffer.byteLength(postData)
                 }
             };
 
             const req = https.request(options, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
+                let chunks = [];
+                
+                res.on('data', chunk => chunks.push(chunk));
+                
                 res.on('end', () => {
+                    const buffer = Buffer.concat(chunks);
                     const encoding = res.headers['content-encoding'];
+
+                    if (res.statusCode >= 400) {
+                        return reject(new Error(`API Error HTTP ${res.statusCode}: ${buffer.toString()}`));
+                    }
+
                     if (encoding === 'gzip' || encoding === 'deflate') {
-                        zlib.unzip(Buffer.from(data, 'binary'), (err, decoded) => {
+                        zlib.unzip(buffer, (err, decoded) => {
+                            if (err) reject(err);
+                            else resolve(decoded.toString().trim());
+                        });
+                    } else if (encoding === 'br') {
+                        zlib.brotliDecompress(buffer, (err, decoded) => {
                             if (err) reject(err);
                             else resolve(decoded.toString().trim());
                         });
                     } else {
-                        resolve(data.trim());
+                        resolve(buffer.toString().trim());
                     }
                 });
             });
