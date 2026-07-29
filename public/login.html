@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DimzLabsAI</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-zinc-950 text-white flex items-center justify-center h-screen">
+    <div class="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl w-full max-w-md space-y-6 text-center shadow-2xl">
+        <h2 class="text-2xl font-bold">Masuk ke DimzLabsAI</h2>
+        <p class="text-xs text-gray-400">Pilih metode masuk untuk mengaktifkan token harian kamu.</p>
+        
+        <div class="space-y-3">
+            <button id="google-btn" class="w-full bg-white text-black font-semibold py-2.5 rounded-xl flex items-center justify-center space-x-2 hover:bg-gray-200 transition">
+                <i class="fab fa-google"></i>
+                <span>Lanjutkan dengan Google (100 Token)</span>
+            </button>
+            
+            <button id="guest-btn" class="w-full bg-zinc-800 text-white font-medium py-2.5 rounded-xl hover:bg-zinc-700 border border-zinc-700 transition">
+                Masuk sebagai Guest (30 Token)
+            </button>
+        </div>
+
+        <div class="relative my-4">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-zinc-800"></div></div>
+            <div class="relative text-xs text-gray-500 uppercase bg-zinc-900 px-2 inline-block">Atau Email</div>
+        </div>
+
+        <form id="auth-form" class="space-y-3 text-left">
+            <input type="email" id="email" placeholder="Email" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+            <input type="password" id="password" placeholder="Kata Sandi" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+            
+            <div class="flex gap-2 pt-2">
+                <button type="button" id="login-email-btn" class="w-1/2 bg-blue-600 hover:bg-blue-500 font-medium py-2.5 rounded-xl text-sm transition">Masuk</button>
+                <button type="button" id="register-email-btn" class="w-1/2 bg-zinc-800 hover:bg-zinc-700 font-medium py-2.5 rounded-xl text-sm border border-zinc-700 transition">Daftar</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Firebase App & Auth SDK v9 (Modular/CDN) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithPopup, 
+            GoogleAuthProvider, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword 
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        // ⚠️ GANTI KONFIGURASI DI BAWAH DENGAN MILIK FIREBASE ANDA ⚠️
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgPynJA0qwgfId3c4PZMZLYSMqaaL4u0",
+            authDomain: "dimzlabsai.firebaseapp.com",
+            projectId: "dimzlabsai",
+            storageBucket: "dimzlabsai.firebasestorage.app",
+            messagingSenderId: "675200621290",
+            appId: "1:675200621290:web:76aa8222689e03a70e1593"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        // 1. Handle Login Google
+        document.getElementById('google-btn').addEventListener('click', async () => {
+            try {
+                const result = await signInWithPopup(auth, googleProvider);
+                saveUserSession(result.user.uid, 'real', result.user.displayName || result.user.email);
+            } catch (error) {
+                alert("Gagal Login dengan Google: " + error.message);
+            }
+        });
+
+        // 2. Handle Login Email
+        document.getElementById('login-email-btn').addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if(!email || !password) return alert("Harap isi email dan password!");
+
+            try {
+                const result = await signInWithEmailAndPassword(auth, email, password);
+                saveUserSession(result.user.uid, 'real', result.user.email);
+            } catch (error) {
+                alert("Gagal Login: " + error.message);
+            }
+        });
+
+        // 3. Handle Register Email
+        document.getElementById('register-email-btn').addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if(!email || !password) return alert("Harap isi email dan password!");
+
+            try {
+                const result = await createUserWithEmailAndPassword(auth, email, password);
+                alert("Akun berhasil dibuat!");
+                saveUserSession(result.user.uid, 'real', result.user.email);
+            } catch (error) {
+                alert("Gagal Pendaftaran: " + error.message);
+            }
+        });
+
+        // 4. Handle Guest Login
+        document.getElementById('guest-btn').addEventListener('click', () => {
+            const guestId = 'guest_' + Math.random().toString(36).substring(7);
+            saveUserSession(guestId, 'guest', 'Guest User');
+        });
+
+        function saveUserSession(uid, status, name) {
+            localStorage.setItem('user_id', uid);
+            localStorage.setItem('user_status', status);
+            localStorage.setItem('user_name', name);
+            alert(`Selamat datang ${name}! Anda masuk sebagai akun ${status.toUpperCase()}.`);
+            window.location.href = '/';
+        }
+    </script>
+</body>
+</html>

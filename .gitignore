@@ -1,0 +1,13 @@
+.vercel
+
+# Mengabaikan folder node_modules agar tidak terupload (ukurannya sangat besar)
+node_modules/
+
+# Mengabaikan file log / cache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Mengabaikan file environment variabel (jika nanti ada kunci API rahasia)
+.env
