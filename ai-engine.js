@@ -27,27 +27,49 @@ class DimzLabsAI {
     }
 
     async chat(message, history = []) {
-        const customPrompt = `You are DimzLabsAI, a helpful, smart, and advanced AI assistant created by DimzLabs. 
-Always structure your answers nicely using Markdown syntax:
-- For lists, use standard Markdown bullet points (*) or numbered lists (1., 2.).
-- For code snippets, always wrap them in triple backticks codeblocks with the language specified.
-- For comparisons, use standard Markdown tables.
-Do not use weird symbols, decorative ASCII art, or unnecessary characters. Keep it clean, concise, and easy to read.`;
+        // 1. Definisikan System Prompt untuk Identitas & Format Response
+        const systemPromptText = `Namamu adalah DimzLabsAI. Kamu adalah asisten AI yang diciptakan dan dikembangkan oleh DimzLabs (Dimas).
+Aturan Identitas:
+- Jika ditanya "siapa kamu", "siapa nama kamu", "siapa pembuatmu", atau pertanyaan serupa, kamu WAJIB menjawab secara eksplisit bahwa namamu adalah DimzLabsAI buatan DimzLabs.
+- Jangan pernah sekali-kali mengaku sebagai model bawaan OpenAI atau mengatakan tidak memiliki nama pribadi.
 
-        // Menyusun riwayat percakapan
-        const formattedMessages = history.map(msg => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.text,
+Aturan Format Jawaban:
+- Selalu gunakan format Markdown yang rapi:
+  * Gunakan bullet points (*) atau numbered lists (1., 2.) untuk daftar/list.
+  * Gunakan triple backticks (\`\`\`language) untuk setiap kode program.
+  * Gunakan tabel Markdown untuk perbandingan data.
+- Jawab secara jelas, ringkas, dan profesional.`;
+
+        // 2. Susun array messages dengan role 'system' di urutan paling awal (index 0)
+        const formattedMessages = [
+            {
+                role: 'system',
+                content: systemPromptText,
+                pluginId: null
+            }
+        ];
+
+        // 3. Masukkan riwayat percakapan sebelumnya
+        history.forEach(msg => {
+            formattedMessages.push({
+                role: msg.sender === 'user' ? 'user' : 'assistant',
+                content: msg.text,
+                pluginId: null
+            });
+        });
+
+        // 4. Masukkan pesan user yang baru
+        formattedMessages.push({
+            role: 'user',
+            content: message,
             pluginId: null
-        }));
+        });
 
-        // Pesan user terbaru
-        formattedMessages.push({ role: 'user', content: message, pluginId: null });
-
+        // 5. Susun Payload Request
         const payload = {
             model: this.model,
             messages: formattedMessages,
-            prompt: customPrompt,
+            prompt: systemPromptText,
             temperature: 0.5,
             enableConversationPrompt: true
         };
