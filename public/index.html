@@ -167,18 +167,20 @@
         <p class="text-center text-[10px] text-gray-500 mt-2">DimzLabsAI · Multi-Engine</p>
     </footer>
 
-    <!-- Firebase App & Firestore (Riwayat Chat) -->
+    <!-- Firebase App & Realtime Database (Riwayat Chat) -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import {
-            getFirestore, collection, doc, setDoc, addDoc,
-            getDocs, query, orderBy, deleteDoc, serverTimestamp
-        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+            getDatabase, ref, set, update, push, get, remove, serverTimestamp
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // Konfigurasi sama seperti di login.html
+        // ⚠️ Tambahkan "databaseURL" setelah Realtime Database dibuat di Firebase Console
+        // Contoh: "https://dimzlabsai-default-rtdb.asia-southeast1.firebasedatabase.app"
         const firebaseConfig = {
             apiKey: "AIzaSyChgPynJA0qwgfId3c4PZMZLYSMqaaL4u0",
             authDomain: "dimzlabsai.firebaseapp.com",
+            databaseURL: "https://dimzlabsai-default-rtdb.asia-southeast1.firebasedatabase.app/",
             projectId: "dimzlabsai",
             storageBucket: "dimzlabsai.firebasestorage.app",
             messagingSenderId: "675200621290",
@@ -186,39 +188,43 @@
         };
 
         const fbApp = initializeApp(firebaseConfig);
-        const db = getFirestore(fbApp);
+        const db = getDatabase(fbApp);
 
-        // Bungkus fungsi Firestore supaya bisa dipanggil dari app.js (script biasa, bukan module)
+        // Struktur data:
+        // chatMeta/{userId}/{chatId}          -> { title, createdAt, updatedAt }
+        // chatMessages/{userId}/{chatId}/{msgId} -> { sender, text, createdAt }
         window.chatDB = {
             async createChatIfNeeded(userId, chatId, title) {
-                const ref = doc(db, 'users', userId, 'chats', chatId);
-                await setDoc(ref, { title, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+                await set(ref(db, `chatMeta/${userId}/${chatId}`), {
+                    title, createdAt: serverTimestamp(), updatedAt: serverTimestamp()
+                });
             },
             async touchChat(userId, chatId) {
-                const ref = doc(db, 'users', userId, 'chats', chatId);
-                await setDoc(ref, { updatedAt: serverTimestamp() }, { merge: true });
+                await update(ref(db, `chatMeta/${userId}/${chatId}`), { updatedAt: serverTimestamp() });
             },
             async addMessage(userId, chatId, sender, text) {
-                const ref = collection(db, 'users', userId, 'chats', chatId, 'messages');
-                await addDoc(ref, { sender, text, createdAt: serverTimestamp() });
+                await push(ref(db, `chatMessages/${userId}/${chatId}`), {
+                    sender, text, createdAt: serverTimestamp()
+                });
             },
             async getChats(userId) {
-                const ref = collection(db, 'users', userId, 'chats');
-                const q = query(ref, orderBy('updatedAt', 'desc'));
-                const snap = await getDocs(q);
-                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                const snap = await get(ref(db, `chatMeta/${userId}`));
+                if (!snap.exists()) return [];
+                const val = snap.val();
+                return Object.keys(val)
+                    .map((id) => ({ id, ...val[id] }))
+                    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
             },
             async getMessages(userId, chatId) {
-                const ref = collection(db, 'users', userId, 'chats', chatId, 'messages');
-                const q = query(ref, orderBy('createdAt', 'asc'));
-                const snap = await getDocs(q);
-                return snap.docs.map(d => d.data());
+                const snap = await get(ref(db, `chatMessages/${userId}/${chatId}`));
+                if (!snap.exists()) return [];
+                const val = snap.val();
+                // Key push() Firebase sudah terurut secara kronologis
+                return Object.keys(val).sort().map((id) => val[id]);
             },
             async deleteChat(userId, chatId) {
-                const msgsRef = collection(db, 'users', userId, 'chats', chatId, 'messages');
-                const snap = await getDocs(msgsRef);
-                await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
-                await deleteDoc(doc(db, 'users', userId, 'chats', chatId));
+                await remove(ref(db, `chatMeta/${userId}/${chatId}`));
+                await remove(ref(db, `chatMessages/${userId}/${chatId}`));
             }
         };
 
