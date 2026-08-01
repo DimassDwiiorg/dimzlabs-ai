@@ -75,10 +75,29 @@
 </head>
 <body class="flex flex-col h-screen justify-between font-sans">
 
+    <!-- Overlay Sidebar (mobile & desktop) -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-40 hidden"></div>
+
+    <!-- Sidebar Riwayat Chat -->
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-72 bg-zinc-950 border-r border-zinc-800/70 z-50 transform -translate-x-full transition-transform duration-300 flex flex-col">
+        <div class="p-4 border-b border-zinc-800/70 flex items-center justify-between">
+            <span class="font-semibold text-sm">Riwayat Chat</span>
+            <button id="sidebar-close-btn" class="text-gray-400 hover:text-white p-1"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="p-3">
+            <button id="new-chat-btn" class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-sm font-medium py-2.5 rounded-xl transition">
+                <i class="fas fa-plus text-xs"></i> Chat Baru
+            </button>
+        </div>
+        <div id="chat-history-list" class="flex-1 overflow-y-auto px-2 space-y-1 pb-4">
+            <p class="text-xs text-gray-500 text-center mt-6">Belum ada riwayat chat.</p>
+        </div>
+    </aside>
+
     <!-- Header Navigation -->
     <header class="flex justify-between items-center p-4 border-b border-zinc-800/50">
         <div class="flex items-center space-x-3">
-            <button class="p-2 text-gray-400 hover:text-white"><i class="fas fa-bars text-xl"></i></button>
+            <button id="sidebar-toggle-btn" class="p-2 text-gray-400 hover:text-white"><i class="fas fa-bars text-xl"></i></button>
             <!-- Logo Navbar Utama -->
             <div class="flex items-center space-x-2">
                 <img src="/logo.png" alt="DimzLabsAI Logo" class="w-8 h-8 object-contain">
@@ -148,6 +167,63 @@
         <p class="text-center text-[10px] text-gray-500 mt-2">DimzLabsAI · Multi-Engine</p>
     </footer>
 
-    <script src="app.js"></script>
+    <!-- Firebase App & Firestore (Riwayat Chat) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import {
+            getFirestore, collection, doc, setDoc, addDoc,
+            getDocs, query, orderBy, deleteDoc, serverTimestamp
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // Konfigurasi sama seperti di login.html
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgPynJA0qwgfId3c4PZMZLYSMqaaL4u0",
+            authDomain: "dimzlabsai.firebaseapp.com",
+            projectId: "dimzlabsai",
+            storageBucket: "dimzlabsai.firebasestorage.app",
+            messagingSenderId: "675200621290",
+            appId: "1:675200621290:web:76aa8222689e03a70e1593"
+        };
+
+        const fbApp = initializeApp(firebaseConfig);
+        const db = getFirestore(fbApp);
+
+        // Bungkus fungsi Firestore supaya bisa dipanggil dari app.js (script biasa, bukan module)
+        window.chatDB = {
+            async createChatIfNeeded(userId, chatId, title) {
+                const ref = doc(db, 'users', userId, 'chats', chatId);
+                await setDoc(ref, { title, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+            },
+            async touchChat(userId, chatId) {
+                const ref = doc(db, 'users', userId, 'chats', chatId);
+                await setDoc(ref, { updatedAt: serverTimestamp() }, { merge: true });
+            },
+            async addMessage(userId, chatId, sender, text) {
+                const ref = collection(db, 'users', userId, 'chats', chatId, 'messages');
+                await addDoc(ref, { sender, text, createdAt: serverTimestamp() });
+            },
+            async getChats(userId) {
+                const ref = collection(db, 'users', userId, 'chats');
+                const q = query(ref, orderBy('updatedAt', 'desc'));
+                const snap = await getDocs(q);
+                return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            },
+            async getMessages(userId, chatId) {
+                const ref = collection(db, 'users', userId, 'chats', chatId, 'messages');
+                const q = query(ref, orderBy('createdAt', 'asc'));
+                const snap = await getDocs(q);
+                return snap.docs.map(d => d.data());
+            },
+            async deleteChat(userId, chatId) {
+                const msgsRef = collection(db, 'users', userId, 'chats', chatId, 'messages');
+                const snap = await getDocs(msgsRef);
+                await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+                await deleteDoc(doc(db, 'users', userId, 'chats', chatId));
+            }
+        };
+
+        window.dispatchEvent(new Event('chatdb-ready'));
+    </script>
+    <script src="app.js" defer></script>
 </body>
 </html>
