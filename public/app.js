@@ -56,6 +56,10 @@ if (!userId) {
 }
 localStorage.setItem('session_id', sessionId);
 
+// Chat yang sedang aktif (dipakai untuk riwayat di Firestore)
+let currentChatId = sessionId;
+let chatSavedToDB = false; // apakah chat ini sudah punya dokumen riwayat di Firestore
+
 sendBtn.addEventListener('click', sendMessage);
 
 // Kirim dengan tombol Enter
@@ -103,6 +107,8 @@ async function sendMessage() {
         if (response.ok) {
             // 4. Render Jawaban AI dengan Efek Ketik Smooth Per Baris
             await streamResponseSmoothly(data.response);
+            // 5. Simpan riwayat chat ke Firestore
+            saveMessagePairToHistory(text, data.response);
         } else if (data.requireLogin) {
             appendMessage(`⚠️ ${data.error}`, 'ai');
             setTimeout(() => {
@@ -206,3 +212,163 @@ function attachCopyButtons(container) {
         pre.appendChild(btn);
     });
 }
+
+// ===================================================================
+// RIWAYAT CHAT (Firebase Firestore)
+// ===================================================================
+
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const sidebarToggleBtn = document.getElementById('sidebar-toggle-btn');
+const sidebarCloseBtn = document.getElementById('sidebar-close-btn');
+const newChatBtn = document.getElementById('new-chat-btn');
+const chatHistoryList = document.getElementById('chat-history-list');
+
+// Menunggu window.chatDB siap (diset oleh script module Firebase di index.html)
+function waitForChatDB() {
+    if (window.chatDB) return Promise.resolve(window.chatDB);
+    return new Promise((resolve) => {
+        window.addEventListener('chatdb-ready', () => resolve(window.chatDB), { once: true });
+    });
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+}
+
+function openSidebar() {
+    sidebar.classList.remove('-translate-x-full');
+    sidebarOverlay.classList.remove('hidden');
+    refreshChatList();
+}
+
+function closeSidebar() {
+    sidebar.classList.add('-translate-x-full');
+    sidebarOverlay.classList.add('hidden');
+}
+
+sidebarToggleBtn?.addEventListener('click', openSidebar);
+sidebarCloseBtn?.addEventListener('click', closeSidebar);
+sidebarOverlay?.addEventListener('click', closeSidebar);
+
+// Tombol "Chat Baru": mulai sesi baru, kosongkan layar
+newChatBtn?.addEventListener('click', () => {
+    currentChatId = 'chat_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 8);
+    sessionId = currentChatId;
+    localStorage.setItem('session_id', sessionId);
+    chatSavedToDB = false;
+
+    messagesContainer.innerHTML = '';
+    messagesContainer.classList.add('hidden');
+    welcomeScreen.classList.remove('hidden');
+
+    closeSidebar();
+});
+
+// Render daftar riwayat chat di sidebar
+async function refreshChatList() {
+    chatHistoryList.innerHTML = '<p class="text-xs text-gray-500 text-center mt-6">Memuat...</p>';
+    try {
+        const chatDB = await waitForChatDB();
+        const chats = await chatDB.getChats(userId);
+
+        if (!chats.length) {
+            chatHistoryList.innerHTML = '<p class="text-xs text-gray-500 text-center mt-6">Belum ada riwayat chat.</p>';
+            return;
+        }
+
+        chatHistoryList.innerHTML = '';
+        chats.forEach((chat) => {
+            const isActive = chat.id === currentChatId;
+            const item = document.createElement('div');
+            item.className = 'group flex items-center justify-between px-3 py-2.5 rounded-xl text-sm cursor-pointer transition ' +
+                (isActive ? 'bg-zinc-800 text-white' : 'text-gray-300 hover:bg-zinc-900');
+            item.innerHTML = `
+                <span class="truncate pr-2">${escapeHtml(chat.title || 'Percakapan')}</span>
+                <button class="delete-chat-btn opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 shrink-0">
+                    <i class="fas fa-trash text-xs"></i>
+                </button>
+            `;
+            item.addEventListener('click', (e) => {
+                if (e.target.closest('.delete-chat-btn')) return;
+                loadChat(chat.id);
+            });
+            item.querySelector('.delete-chat-btn').addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm('Hapus percakapan ini?')) return;
+                await chatDB.deleteChat(userId, chat.id);
+                if (chat.id === currentChatId) newChatBtn.click();
+                refreshChatList();
+            });
+            chatHistoryList.appendChild(item);
+        });
+    } catch (err) {
+        console.warn('Gagal memuat riwayat chat:', err);
+        chatHistoryList.innerHTML = '<p class="text-xs text-red-400 text-center mt-6">Gagal memuat riwayat.</p>';
+    }
+}
+
+// Buka salah satu chat lama dari sidebar
+async function loadChat(chatId) {
+    currentChatId = chatId;
+    sessionId = chatId;
+    localStorage.setItem('session_id', sessionId);
+    chatSavedToDB = true;
+
+    try {
+        const chatDB = await waitForChatDB();
+        const messages = await chatDB.getMessages(userId, chatId);
+
+        messagesContainer.innerHTML = '';
+        if (messages.length) {
+            welcomeScreen.classList.add('hidden');
+            messagesContainer.classList.remove('hidden');
+            messages.forEach((m) => appendMessage(m.text, m.sender));
+        } else {
+            welcomeScreen.classList.remove('hidden');
+            messagesContainer.classList.add('hidden');
+        }
+    } catch (err) {
+        console.warn('Gagal membuka riwayat chat:', err);
+    }
+
+    closeSidebar();
+}
+
+// Simpan sepasang pesan (user + AI) ke Firestore setelah balasan sukses
+async function saveMessagePairToHistory(userText, aiText) {
+    try {
+        const chatDB = await waitForChatDB();
+
+        if (!chatSavedToDB) {
+            const title = userText.length > 40 ? userText.slice(0, 40) + '…' : userText;
+            await chatDB.createChatIfNeeded(userId, currentChatId, title);
+            chatSavedToDB = true;
+        } else {
+            await chatDB.touchChat(userId, currentChatId);
+        }
+
+        await chatDB.addMessage(userId, currentChatId, 'user', userText);
+        await chatDB.addMessage(userId, currentChatId, 'ai', aiText);
+    } catch (err) {
+        console.warn('Gagal menyimpan riwayat chat:', err);
+    }
+}
+
+// Saat halaman dibuka, lanjutkan chat terakhir (jika ada) tanpa perlu buka sidebar
+(async () => {
+    try {
+        const chatDB = await waitForChatDB();
+        const messages = await chatDB.getMessages(userId, currentChatId);
+        if (messages.length) {
+            chatSavedToDB = true;
+            welcomeScreen.classList.add('hidden');
+            messagesContainer.classList.remove('hidden');
+            messages.forEach((m) => appendMessage(m.text, m.sender));
+        }
+    } catch (err) {
+        console.warn('Gagal memuat chat terakhir:', err);
+    }
+})();
