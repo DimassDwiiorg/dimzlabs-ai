@@ -80,7 +80,8 @@ app.post('/api/chat', async (req, res) => {
         session.count--;
         res.json({ response, remainingTokens: session.count });
     } catch (err) {
-        res.status(500).json({ error: "Gagal terhubung ke server AI." });
+        console.error('CHAT ERROR:', err);
+        res.status(500).json({ error: "Gagal terhubung ke server AI.", detail: err.message });
     }
 });
 
