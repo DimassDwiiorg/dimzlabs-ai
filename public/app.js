@@ -219,29 +219,45 @@ async function streamResponseSmoothly(fullText) {
 }
 
 function appendMessage(text, sender, imageSrc = null) {
-    const msgDiv = document.createElement('div');
-    msgDiv.className = sender === 'user' 
-        ? 'ml-auto bg-blue-600 text-white rounded-2xl px-4 py-2.5 max-w-[80%] w-fit text-sm space-y-2'
-        : 'mr-auto bg-zinc-900 border border-zinc-800 text-gray-200 rounded-2xl px-4 py-3 max-w-[90%] text-sm space-y-2';
+    if (sender === 'user') {
+        // Membuat container utama untuk pesan user (rata kanan)
+        const wrapperDiv = document.createElement('div');
+        wrapperDiv.className = 'ml-auto flex flex-col items-end space-y-2 max-w-[80%] w-fit';
 
-    if (sender === 'ai') {
-        msgDiv.innerHTML = marked.parse(text);
-        attachCopyButtons(msgDiv);
-    } else {
+        // Jika ada gambar, tampilkan gambar TANPA bubble background
         if (imageSrc) {
             const img = document.createElement('img');
             img.src = imageSrc;
-            img.className = 'rounded-lg max-h-40 mb-1';
-            msgDiv.appendChild(img);
+            // Styling gambar agar melengkung rapi seperti Gemini
+            img.className = 'rounded-2xl max-h-60 object-contain shadow-md';
+            wrapperDiv.appendChild(img);
         }
+
+        // Jika ada teks, tampilkan dalam bubble tersendiri di bawah gambar
         if (text) {
             const textDiv = document.createElement('div');
+            // Menggunakan bg-zinc-800 agar warnanya senada dengan contoh Gambar 1. 
+            // Jika ingin tetap biru, ganti menjadi 'bg-blue-600'
+            textDiv.className = 'bg-zinc-800 text-white rounded-3xl px-5 py-2.5 text-sm w-fit';
             textDiv.textContent = text;
-            msgDiv.appendChild(textDiv);
+            wrapperDiv.appendChild(textDiv);
         }
+
+        messagesContainer.appendChild(wrapperDiv);
+    } else {
+        // Tampilan untuk pesan AI (tetap sama seperti sebelumnya)
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'mr-auto bg-zinc-900 border border-zinc-800 text-gray-200 rounded-2xl px-4 py-3 max-w-[90%] text-sm space-y-2';
+        
+        if (text) {
+            msgDiv.innerHTML = marked.parse(text);
+            attachCopyButtons(msgDiv);
+        }
+        
+        messagesContainer.appendChild(msgDiv);
     }
 
-    messagesContainer.appendChild(msgDiv);
+    // Scroll otomatis ke paling bawah
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
