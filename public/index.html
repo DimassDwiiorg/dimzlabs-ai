@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DimzLabsAI</title>
+    <!-- Favicon / Logo di Tab Browser -->
+    <link rel="icon" type="image/png" href="/logo.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+    body { background-color: #0f0f10; color: #ffffff; }
+    .chip { background-color: #1e1e21; border: 1px solid #2d2d32; }
+    .chip:hover { background-color: #2a2a30; }
+    .input-box { background-color: #18181b; border: 1px solid #27272a; }
+
+    /* Markdown Styling */
+    #messages ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin: 0.5rem 0; }
+    #messages ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin: 0.5rem 0; }
+    #messages li { margin-bottom: 0.4rem; line-height: 1.6; }
+    #messages p { margin-bottom: 0.75rem; line-height: 1.6; }
+
+    /* Code Block & Copy Button */
+    #messages pre { 
+        position: relative;
+        background-color: #18181b; 
+        border: 1px solid #27272a; 
+        padding: 2.5rem 1rem 1rem 1rem; 
+        border-radius: 0.75rem; 
+        overflow-x: auto; 
+        margin: 0.75rem 0; 
+    }
+    #messages code { font-family: monospace; font-size: 0.875rem; }
+    
+    .copy-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        background-color: #27272a;
+        color: #a1a1aa;
+        border: 1px solid #3f3f46;
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+        border-radius: 0.375rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .copy-btn:hover { background-color: #3f3f46; color: #ffffff; }
+
+    /* Table Styling */
+    #messages table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+    #messages th, #messages td { border: 1px solid #27272a; padding: 0.5rem 0.75rem; text-align: left; }
+    #messages th { background-color: #18181b; font-weight: 600; }
+
+    /* Typing Pulse / Thinking Indicator */
+    .typing-dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        margin-right: 3px;
+        background-color: #a1a1aa;
+        border-radius: 50%;
+        animation: pulse 1.4s infinite ease-in-out both;
+    }
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes pulse {
+        0%, 80%, 100% { transform: scale(0); }
+        40% { transform: scale(1); }
+    }
+    </style>
+</head>
+<body class="flex flex-col h-screen justify-between font-sans relative">
+
+    <!-- Sidebar Overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/60 z-40 hidden transition-opacity"></div>
+    
+    <!-- Sidebar -->
+    <aside id="sidebar" class="fixed top-0 left-0 h-full w-64 bg-zinc-950 border-r border-zinc-800 z-50 transform -translate-x-full transition-transform duration-300 flex flex-col shadow-2xl">
+        <div class="p-4 border-b border-zinc-800 flex justify-between items-center">
+            <h2 class="text-white font-bold text-sm tracking-wide">Riwayat Chat</h2>
+            <div class="flex space-x-4">
+                <!-- Tombol Chat Baru -->
+                <button id="new-chat-btn" class="text-gray-400 hover:text-white transition" title="Chat Baru"><i class="fas fa-edit"></i></button>
+                <button id="close-sidebar" class="text-gray-400 hover:text-white transition" title="Tutup"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+        <div id="history-list" class="flex-1 overflow-y-auto p-3 space-y-2">
+            <!-- Tempat Load History dari Firebase nantinya -->
+            <div class="text-xs text-gray-500 text-center mt-6">
+                <i class="fas fa-spinner fa-spin text-2xl mb-2 opacity-50"></i><br>
+                Memuat riwayat...
+            </div>
+        </div>
+    </aside>
+
+    <!-- Header Navigation -->
+    <header class="flex justify-between items-center p-4 border-b border-zinc-800/50">
+        <div class="flex items-center space-x-3">
+            <button id="menu-btn" class="p-2 text-gray-400 hover:text-white transition"><i class="fas fa-bars text-xl"></i></button>
+            <!-- Logo Navbar Utama -->
+            <div class="flex items-center space-x-2">
+                <img src="/logo.png" alt="DimzLabsAI Logo" class="w-8 h-8 object-contain">
+                <h1 class="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">DimzLabsAI</h1>
+            </div>
+        </div>
+        
+        <!-- Bagian Navbar Kanan (Info Status User & Auth Button) -->
+        <div class="flex items-center space-x-3">
+            <div id="user-info" class="text-xs text-gray-400 hidden sm:block">
+                <span id="user-name-display" class="text-white font-medium"></span>
+                <span id="user-badge" class="ml-1 px-2 py-0.5 rounded text-[10px] bg-blue-600/30 text-blue-400 border border-blue-500/30"></span>
+            </div>
+            <button id="auth-action-btn" class="text-xs bg-zinc-800 hover:bg-zinc-700 text-gray-300 border border-zinc-700 px-3 py-1.5 rounded-lg transition">
+                Login
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main id="chat-container" class="flex-1 overflow-y-auto px-4 py-6 flex flex-col items-center">
+        <!-- Dashboard Tampilan Awal -->
+        <div id="welcome-screen" class="flex flex-col items-center justify-center my-auto text-center space-y-4">
+            <!-- Logo Utama di Welcome Screen -->
+            <div class="w-24 h-24 rounded-2xl overflow-hidden shadow-2xl mb-2 p-1 border border-zinc-800 bg-zinc-900/50 flex items-center justify-center">
+                <img src="/logo.png" alt="DimzLabsAI Logo" class="w-full h-full object-contain">
+            </div>
+            <h2 class="text-2xl font-bold tracking-tight">DimzLabsAI</h2>
+            <p class="text-gray-400 text-sm max-w-xs">Asisten AI cerdas, canggih, dan efisien.</p>
+
+            <!-- Quick Action Chips -->
+            <div class="flex flex-wrap justify-center gap-2 max-w-sm pt-4">
+                <button onclick="sendQuickMessage('Cara kerja AI')" class="chip px-4 py-2 rounded-full text-xs font-medium text-gray-300 transition">Cara kerja AI</button>
+                <button onclick="sendQuickMessage('Buatkan Kode Python')" class="chip px-4 py-2 rounded-full text-xs font-medium text-gray-300 transition">Kode Python</button>
+                <button onclick="sendQuickMessage('Buatkan Caption IG')" class="chip px-4 py-2 rounded-full text-xs font-medium text-gray-300 transition">Caption IG</button>
+                <button onclick="sendQuickMessage('Tips Mobile Legends')" class="chip px-4 py-2 rounded-full text-xs font-medium text-gray-300 transition">ML</button>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div id="messages" class="w-full max-w-2xl space-y-4 hidden"></div>
+    </main>
+
+    <!-- Input Box Bottom -->
+    <footer class="p-4 w-full max-w-2xl mx-auto">
+        <div class="input-box rounded-3xl p-3 flex flex-col space-y-2 shadow-xl">
+            <div id="image-preview-wrapper" class="hidden px-1">
+                <div class="relative inline-block">
+                    <img id="image-preview" class="h-16 w-16 object-cover rounded-lg border border-zinc-700" />
+                    <button id="remove-image-btn" class="absolute -top-2 -right-2 bg-zinc-800 border border-zinc-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] hover:bg-zinc-700 transition">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <textarea id="user-input" rows="1" placeholder="Tanya apa saja..." class="bg-transparent text-white placeholder-gray-500 resize-none outline-none px-2 text-sm"></textarea>
+            <input type="file" id="image-input" accept="image/*" class="hidden">
+
+            <div class="flex justify-between items-center pt-2">
+                <div class="flex items-center space-x-2">
+                    <button id="attach-btn" class="text-gray-400 hover:text-white p-1 text-sm transition"><i class="fas fa-plus"></i></button>
+                    
+                    <!-- DROPDOWN PILIHAN MODEL -->
+                    <div class="relative inline-block">
+                        <button id="model-selector-btn" class="bg-zinc-800 text-gray-300 px-3 py-1 rounded-full text-xs font-medium flex items-center space-x-1 border border-zinc-700 hover:bg-zinc-700 transition">
+                            <i id="model-icon" class="fas fa-bolt text-yellow-400 text-xs"></i>
+                            <span id="model-text">Fast</span>
+                            <i class="fas fa-chevron-down text-xs ml-1"></i>
+                        </button>
+                        <!-- Menu Dropdown -->
+                        <div id="model-dropdown" class="absolute bottom-full left-0 mb-2 w-28 bg-zinc-800 border border-zinc-700 rounded-xl shadow-lg hidden flex-col overflow-hidden z-50">
+                            <button onclick="selectModel('fast')" class="flex items-center space-x-2 px-3 py-2 text-xs text-left hover:bg-zinc-700 text-gray-200 transition">
+                                <i class="fas fa-bolt text-yellow-400 w-4 text-center"></i>
+                                <span>Fast</span>
+                            </button>
+                            <button onclick="selectModel('claude')" class="flex items-center space-x-2 px-3 py-2 text-xs text-left hover:bg-zinc-700 text-gray-200 transition">
+                                <i class="fas fa-brain text-purple-400 w-4 text-center"></i>
+                                <span>Claude</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <button class="text-gray-400 hover:text-white p-2 text-sm transition"><i class="fas fa-microphone"></i></button>
+                    <button id="send-btn" class="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-full w-8 h-8 flex items-center justify-center transition shadow-lg shadow-blue-500/20">
+                        <i class="fas fa-paper-plane text-xs"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <p class="text-center text-[10px] text-gray-500 mt-2">DimzLabsAI · Multi-Engine</p>
+    </footer>
+
+    <!-- Wajib type module karena Firebase SDK -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
