@@ -1,11 +1,11 @@
 const express = require('express');
 const path = require('path');
 const DimzLabsAI = require('./ai-engine');
-const GeminiVision = require('./gemini-engine');
+const GroqVision = require('./vision-engine');
 
 const app = express();
 const ai = new DimzLabsAI();
-const vision = new GeminiVision();
+const vision = new GroqVision();
 
 // Limit dinaikkan jadi 10mb karena gambar base64 lebih besar dari teks biasa
 app.use(express.json({ limit: '10mb' }));
