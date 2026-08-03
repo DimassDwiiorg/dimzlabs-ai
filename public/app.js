@@ -1,12 +1,48 @@
+// Import Firebase SDK (Versi Modular)
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getDatabase, ref, set, push, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+// Konfigurasi Firebase
+const firebaseConfig = {
+    apiKey: "AIzaSyChgPynJA0qwgfId3c4PZMZLYSMqaaL4u0",
+    authDomain: "dimzlabsai.firebaseapp.com",
+    databaseURL: "https://dimzlabsai-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "dimzlabsai",
+    storageBucket: "dimzlabsai.firebasestorage.app",
+    messagingSenderId: "675200621290",
+    appId: "1:675200621290:web:76aa8222689e03a70e1593",
+    measurementId: "G-4XZVPZ0DRM"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// User ID & Session ID Management
+let userId = localStorage.getItem('user_id');
+let userStatus = localStorage.getItem('user_status') || 'trial';
+let sessionId = localStorage.getItem('session_id') || 'session_' + Math.random().toString(36).substring(7);
+
+if (!userId) {
+    userId = 'trial_' + Math.random().toString(36).substring(7);
+    localStorage.setItem('user_id', userId);
+    localStorage.setItem('user_status', 'trial');
+}
+localStorage.setItem('session_id', sessionId);
+
+const userInput = document.getElementById('user-input');
+const sendBtn = document.getElementById('send-btn');
+const messagesContainer = document.getElementById('messages');
+const welcomeScreen = document.getElementById('welcome-screen');
+const historyList = document.getElementById('history-list');
+
 // Cek Status Auth saat aplikasi dimuat
 document.addEventListener('DOMContentLoaded', () => {
     updateAuthUI();
+    loadHistorySidebar(); // Memuat riwayat chat dari Firebase
 });
 
 function updateAuthUI() {
-    const userStatus = localStorage.getItem('user_status') || 'trial';
     const userName = localStorage.getItem('user_name') || 'Pengunjung';
-    
     const userNameDisplay = document.getElementById('user-name-display');
     const userBadge = document.getElementById('user-badge');
     const authBtn = document.getElementById('auth-action-btn');
@@ -39,22 +75,132 @@ function logout() {
     alert("Anda telah keluar.");
     window.location.reload();
 }
-const userInput = document.getElementById('user-input');
-const sendBtn = document.getElementById('send-btn');
-const messagesContainer = document.getElementById('messages');
-const welcomeScreen = document.getElementById('welcome-screen');
 
-// User ID & Session ID Management
-let userId = localStorage.getItem('user_id');
-let userStatus = localStorage.getItem('user_status') || 'trial';
-let sessionId = localStorage.getItem('session_id') || 'session_' + Math.random().toString(36).substring(7);
+// --- LOGIKA FIREBASE: RIWAYAT CHAT ---
+function loadHistorySidebar() {
+    // Menggunakan node chatMeta sesuai dengan database kamu yang lama
+    const userMetaRef = ref(db, `chatMeta/${userId}`);
+    onValue(userMetaRef, (snapshot) => {
+        historyList.innerHTML = ''; 
+        if (snapshot.exists()) {
+            const metas = snapshot.val();
+            // Urutkan berdasarkan waktu terbaru
+            const chatArray = Object.keys(metas).map(key => ({
+                id: key,
+                ...metas[key]
+            })).sort((a, b) => b.timestamp - a.timestamp);
 
-if (!userId) {
-    userId = 'trial_' + Math.random().toString(36).substring(7);
-    localStorage.setItem('user_id', userId);
-    localStorage.setItem('user_status', 'trial');
+            chatArray.forEach(chat => {
+                const btn = document.createElement('button');
+                btn.className = 'w-full text-left p-3 rounded-xl bg-zinc-900/50 hover:bg-zinc-800 border border-zinc-800/50 transition mb-2 text-sm text-gray-300 truncate';
+                btn.textContent = chat.title || 'Percakapan Baru...';
+                // Saat diklik, panggil data dari chatMessages
+                btn.onclick = () => loadChatSession(chat.id);
+                historyList.appendChild(btn);
+            });
+        } else {
+            historyList.innerHTML = `
+                <div class="text-xs text-gray-500 text-center mt-6">
+                    <i class="fas fa-history text-2xl mb-2 opacity-50"></i><br>
+                    Belum ada riwayat
+                </div>
+            `;
+        }
+    });
 }
-localStorage.setItem('session_id', sessionId);
+
+async function loadChatSession(id) {
+    sessionId = id;
+    localStorage.setItem('session_id', sessionId);
+    
+    messagesContainer.innerHTML = '';
+    welcomeScreen.classList.add('hidden');
+    messagesContainer.classList.remove('hidden');
+
+    // Mengambil pesan dari node chatMessages sesuai struktur lama kamu
+    const sessionMessagesRef = ref(db, `chatMessages/${userId}/${sessionId}`);
+    const snapshot = await get(sessionMessagesRef);
+
+    if (snapshot.exists()) {
+        const messages = snapshot.val();
+        // Mengubah object menjadi array dan mengurutkannya berdasarkan timestamp
+        const msgArray = Object.values(messages);
+        msgArray.sort((a, b) => a.timestamp - b.timestamp);
+
+        msgArray.forEach(msg => {
+            appendMessage(msg.text, msg.sender, msg.imageSrc);
+        });
+    }
+    closeSidebar();
+}
+
+async function saveMessageToFirebase(sender, text, imageSrc = null) {
+    // Menyimpan metadata ke chatMeta
+    const metaRef = ref(db, `chatMeta/${userId}/${sessionId}`);
+    const metaSnapshot = await get(metaRef);
+    
+    if (!metaSnapshot.exists() && sender === 'user') {
+        // Buat metadata baru jika belum ada
+        let title = text ? text.substring(0, 30) : 'Mengirim Gambar';
+        if (text && text.length > 30) title += '...';
+        
+        await set(metaRef, {
+            title: title,
+            timestamp: Date.now()
+        });
+    } else if (metaSnapshot.exists() && sender === 'user') {
+        // Update timestamp agar chat ini naik ke paling atas di sidebar
+        await update(metaRef, {
+            timestamp: Date.now()
+        });
+    }
+
+    // Menyimpan isi pesan ke chatMessages
+    const msgRef = ref(db, `chatMessages/${userId}/${sessionId}`);
+    push(msgRef, {
+        sender: sender,
+        text: text || '',
+        imageSrc: imageSrc || null,
+        timestamp: Date.now()
+    });
+}
+
+// --- LOGIKA SIDEBAR ---
+const menuBtn = document.getElementById('menu-btn');
+const closeSidebarBtn = document.getElementById('close-sidebar');
+const sidebar = document.getElementById('sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const newChatBtn = document.getElementById('new-chat-btn');
+
+if (menuBtn && sidebar) {
+    menuBtn.addEventListener('click', () => {
+        sidebar.classList.remove('-translate-x-full');
+        sidebarOverlay.classList.remove('hidden');
+    });
+}
+
+function closeSidebar() {
+    sidebar.classList.add('-translate-x-full');
+    sidebarOverlay.classList.add('hidden');
+}
+
+if (closeSidebarBtn) closeSidebarBtn.addEventListener('click', closeSidebar);
+if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+
+// Logika Tombol Chat Baru
+if (newChatBtn) {
+    newChatBtn.addEventListener('click', () => {
+        sessionId = 'session_' + Math.random().toString(36).substring(7);
+        localStorage.setItem('session_id', sessionId);
+        
+        messagesContainer.innerHTML = '';
+        messagesContainer.classList.add('hidden');
+        welcomeScreen.classList.remove('hidden');
+        
+        closeSidebar();
+    });
+}
+
 
 // --- Fitur Upload Gambar (Vision via Gemini) ---
 const attachBtn = document.getElementById('attach-btn');
@@ -63,7 +209,7 @@ const imagePreviewWrapper = document.getElementById('image-preview-wrapper');
 const imagePreview = document.getElementById('image-preview');
 const removeImageBtn = document.getElementById('remove-image-btn');
 
-let attachedImageBase64 = null; // base64 murni (tanpa prefix data:...)
+let attachedImageBase64 = null; 
 let attachedImageMime = null;
 
 attachBtn.addEventListener('click', () => imageInput.click());
@@ -74,7 +220,6 @@ imageInput.addEventListener('change', () => {
 
     const reader = new FileReader();
     reader.onload = () => {
-        // reader.result formatnya "data:image/png;base64,AAAA..."
         const [prefix, base64Data] = reader.result.split(',');
         attachedImageBase64 = base64Data;
         attachedImageMime = file.type;
@@ -102,26 +247,29 @@ userInput.addEventListener('keydown', (e) => {
     }
 });
 
-function sendQuickMessage(text) {
+// Mengekspos fungsi ini agar bisa dipanggil dari HTML (onclick)
+window.sendQuickMessage = function(text) {
     userInput.value = text;
     sendMessage();
-}
+};
 
 async function sendMessage() {
     const text = userInput.value.trim();
     const hasImage = !!attachedImageBase64;
 
-    // Butuh minimal salah satu: teks ATAU gambar
     if (!text && !hasImage) return;
 
     welcomeScreen.classList.add('hidden');
     messagesContainer.classList.remove('hidden');
 
-    // 1. Tampilkan Pesan User (dengan thumbnail gambar kalau ada)
-    appendMessage(text, 'user', hasImage ? imagePreview.src : null);
+    const imgSrc = hasImage ? imagePreview.src : null;
+    appendMessage(text, 'user', imgSrc);
+    
+    // SIMPAN KE FIREBASE (Pesan User)
+    saveMessageToFirebase('user', text, imgSrc);
+
     userInput.value = '';
 
-    // Simpan gambar untuk dikirim, lalu langsung bersihkan area preview
     const imageToSend = attachedImageBase64;
     const mimeToSend = attachedImageMime;
     attachedImageBase64 = null;
@@ -129,10 +277,8 @@ async function sendMessage() {
     imageInput.value = '';
     imagePreviewWrapper.classList.add('hidden');
 
-    // 2. Disable Input & Button (Mencegah kirim beruntun saat AI berpikir)
     setInputsDisabled(true);
 
-    // 3. Tampilkan Thinking Bubble (Indikator Loading AI)
     const thinkingElement = appendThinkingBubble();
 
     try {
@@ -149,12 +295,12 @@ async function sendMessage() {
 
         const data = await response.json();
 
-        // Hapus Thinking Bubble
         thinkingElement.remove();
 
         if (response.ok) {
-            // 4. Render Jawaban AI dengan Efek Ketik Smooth Per Baris
             await streamResponseSmoothly(data.response);
+            // SIMPAN KE FIREBASE (Jawaban AI)
+            saveMessageToFirebase('ai', data.response);
         } else if (data.requireLogin) {
             appendMessage(`⚠️ ${data.error}`, 'ai');
             setTimeout(() => {
@@ -168,13 +314,11 @@ async function sendMessage() {
         if (thinkingElement) thinkingElement.remove();
         appendMessage("⚠️ Gagal terhubung ke server.", 'ai');
     } finally {
-        // Enable kembali Input & Button
         setInputsDisabled(false);
         userInput.focus();
     }
 }
 
-// Mengunci & Membuka Input
 function setInputsDisabled(disabled) {
     userInput.disabled = disabled;
     sendBtn.disabled = disabled;
@@ -185,7 +329,6 @@ function setInputsDisabled(disabled) {
     }
 }
 
-// Buble Indikator Berpikir
 function appendThinkingBubble() {
     const msgDiv = document.createElement('div');
     msgDiv.className = 'mr-auto bg-zinc-900 border border-zinc-800 text-gray-200 rounded-2xl px-4 py-3 max-w-[90%] text-sm flex items-center space-x-1';
@@ -200,7 +343,6 @@ function appendThinkingBubble() {
     return msgDiv;
 }
 
-// Efek Typing Per Baris Smooth (mirip Gemini)
 async function streamResponseSmoothly(fullText) {
     const msgDiv = document.createElement('div');
     msgDiv.className = 'mr-auto bg-zinc-900 border border-zinc-800 text-gray-200 rounded-2xl px-4 py-3 max-w-[90%] text-sm space-y-2';
@@ -212,31 +354,26 @@ async function streamResponseSmoothly(fullText) {
     for (let i = 0; i < lines.length; i++) {
         currentText += lines[i] + '\n';
         msgDiv.innerHTML = marked.parse(currentText);
-        attachCopyButtons(msgDiv); // Pasang tombol copy di setiap code block
+        attachCopyButtons(msgDiv);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        await new Promise(resolve => setTimeout(resolve, 40)); // Kecepatan muncul per baris (40ms)
+        await new Promise(resolve => setTimeout(resolve, 40)); 
     }
 }
 
 function appendMessage(text, sender, imageSrc = null) {
     if (sender === 'user') {
-        // Membuat container utama untuk pesan user (rata kanan)
         const wrapperDiv = document.createElement('div');
         wrapperDiv.className = 'ml-auto flex flex-col items-end space-y-2 max-w-[80%] w-fit';
 
-        // Jika ada gambar, tampilkan gambar TANPA bubble background
         if (imageSrc) {
             const img = document.createElement('img');
             img.src = imageSrc;
-            // Styling gambar agar melengkung rapi seperti Gemini
             img.className = 'rounded-2xl max-h-60 object-contain shadow-md';
             wrapperDiv.appendChild(img);
         }
 
-        // Jika ada teks, tampilkan dalam bubble tersendiri di bawah gambar
         if (text) {
             const textDiv = document.createElement('div');
-            // Warna diubah menjadi bg-zinc-700 agar sedikit lebih cerah dari sebelumnya
             textDiv.className = 'bg-zinc-700 text-white rounded-3xl px-5 py-2.5 text-sm w-fit shadow-sm';
             textDiv.textContent = text;
             wrapperDiv.appendChild(textDiv);
@@ -244,7 +381,6 @@ function appendMessage(text, sender, imageSrc = null) {
 
         messagesContainer.appendChild(wrapperDiv);
     } else {
-        // Tampilan untuk pesan AI (tetap sama seperti sebelumnya)
         const msgDiv = document.createElement('div');
         msgDiv.className = 'mr-auto bg-zinc-900 border border-zinc-800 text-gray-200 rounded-2xl px-4 py-3 max-w-[90%] text-sm space-y-2';
         
@@ -256,15 +392,13 @@ function appendMessage(text, sender, imageSrc = null) {
         messagesContainer.appendChild(msgDiv);
     }
 
-    // Scroll otomatis ke paling bawah
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// Pasang Tombol Copy Code Otomatis di Setiap Blok Kode
 function attachCopyButtons(container) {
     const codeBlocks = container.querySelectorAll('pre');
     codeBlocks.forEach((pre) => {
-        if (pre.querySelector('.copy-btn')) return; // Mencegah tombol ganda
+        if (pre.querySelector('.copy-btn')) return;
 
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
