@@ -236,9 +236,8 @@ function appendMessage(text, sender, imageSrc = null) {
         // Jika ada teks, tampilkan dalam bubble tersendiri di bawah gambar
         if (text) {
             const textDiv = document.createElement('div');
-            // Menggunakan bg-zinc-800 agar warnanya senada dengan contoh Gambar 1. 
-            // Jika ingin tetap biru, ganti menjadi 'bg-blue-600'
-            textDiv.className = 'bg-zinc-800 text-white rounded-3xl px-5 py-2.5 text-sm w-fit';
+            // Warna diubah menjadi bg-zinc-700 agar sedikit lebih cerah dari sebelumnya
+            textDiv.className = 'bg-zinc-700 text-white rounded-3xl px-5 py-2.5 text-sm w-fit shadow-sm';
             textDiv.textContent = text;
             wrapperDiv.appendChild(textDiv);
         }
