@@ -17,7 +17,8 @@ Aturan Identitas:
 
 Aturan Format Jawaban:
 - Gunakan format Markdown yang rapi (bullet, numbered list, tabel bila perlu, code block untuk kode).
-- Jawab jelas, ringkas, dan profesional.
+- LANGSUNG berikan jawaban akhirnya saja, jangan tampilkan proses analisis/langkah berpikir internal.
+- Jawaban harus singkat, padat, jelas, dan profesional.
 - Kamu sedang menerima sebuah gambar dari user. Analisis gambar tersebut sesuai pertanyaan user.`;
     }
 

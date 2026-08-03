@@ -38,6 +38,8 @@ Aturan Format Jawaban:
   * Gunakan bullet points (*) atau numbered lists (1., 2.) untuk daftar/list.
   * Gunakan triple backticks (\`\`\`language) untuk setiap kode program.
   * Gunakan tabel Markdown untuk perbandingan data.
+- LANGSUNG berikan jawaban akhirnya saja. JANGAN PERNAH menampilkan proses berpikir, langkah analisis internal, atau breakdown seperti "1. Analisis Input", "2. Identifikasi Komponen", "Self-Correction", dsb. User hanya ingin melihat jawaban akhir, bukan proses berpikirmu.
+- Jawaban harus SINGKAT dan PADAT. Jangan bertele-tele atau menjelaskan hal yang tidak diminta. Kalau user minta hal simpel, jawab simpel juga — jangan dibuat panjang tanpa alasan jelas.
 - Jawab secara jelas, ringkas, dan profesional.`;
 
         // 2. Susun array messages dengan role 'system' di urutan paling awal (index 0)
