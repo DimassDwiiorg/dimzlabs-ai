@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DimzLabsAI</title>
+    <link rel="icon" type="image/png" href="/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-zinc-950 text-white flex items-center justify-center h-screen">
+
+    <!-- CUSTOM ALERT POP-UP -->
+    <div id="custom-alert" class="fixed inset-0 bg-black/80 z-[100] hidden items-center justify-center p-4">
+        <div id="custom-alert-box" class="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl">
+            <div id="alert-icon-container" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i id="alert-icon" class="fas fa-info-circle text-3xl"></i>
+            </div>
+            <h3 id="alert-title" class="text-xl font-bold text-white mb-2">Pemberitahuan</h3>
+            <p id="alert-message" class="text-sm text-gray-400 mb-6">Pesan alert disini.</p>
+            <button onclick="closeAlert()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-medium py-2.5 rounded-xl transition shadow-lg shadow-blue-500/20">
+                OK
+            </button>
+        </div>
+    </div>
+
+    <!-- MAIN LOGIN CARD -->
+    <div class="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl w-full max-w-md space-y-6 text-center shadow-2xl">
+        <h2 class="text-2xl font-bold">Masuk ke DimzLabsAI</h2>
+        <p class="text-xs text-gray-400">Pilih metode masuk untuk mengaktifkan token harian kamu.</p>
+        
+        <div class="space-y-3">
+            <button id="google-btn" class="w-full bg-white text-black font-semibold py-2.5 rounded-xl flex items-center justify-center space-x-2 hover:bg-gray-200 transition">
+                <i class="fab fa-google"></i>
+                <span>Lanjutkan dengan Google (100 Token)</span>
+            </button>
+            
+            <button id="guest-btn" class="w-full bg-zinc-800 text-white font-medium py-2.5 rounded-xl hover:bg-zinc-700 border border-zinc-700 transition">
+                Masuk sebagai Guest (30 Token)
+            </button>
+        </div>
+
+        <div class="relative my-4">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-zinc-800"></div></div>
+            <div class="relative text-xs text-gray-500 uppercase bg-zinc-900 px-2 inline-block">Atau Email</div>
+        </div>
+
+        <form id="auth-form" class="space-y-3 text-left">
+            <input type="email" id="email" placeholder="Email" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+            <input type="password" id="password" placeholder="Kata Sandi" required class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-blue-500">
+            
+            <div class="flex gap-2 pt-2">
+                <button type="button" id="login-email-btn" class="w-1/2 bg-blue-600 hover:bg-blue-500 font-medium py-2.5 rounded-xl text-sm transition">Masuk</button>
+                <button type="button" id="register-email-btn" class="w-1/2 bg-zinc-800 hover:bg-zinc-700 font-medium py-2.5 rounded-xl text-sm border border-zinc-700 transition">Daftar</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Firebase App & Auth SDK v9 (Modular/CDN) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { 
+            getAuth, 
+            signInWithRedirect, 
+            getRedirectResult,
+            GoogleAuthProvider, 
+            signInWithEmailAndPassword, 
+            createUserWithEmailAndPassword 
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyChgPynJA0qwgfId3c4PZMZLYSMqaaL4u0",
+            authDomain: "dimzlabsai.firebaseapp.com",
+            databaseURL: "https://dimzlabsai-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "dimzlabsai",
+            storageBucket: "dimzlabsai.firebasestorage.app",
+            messagingSenderId: "675200621290",
+            appId: "1:675200621290:web:76aa8222689e03a70e1593",
+            measurementId: "G-4XZVPZ0DRM"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        // ---------------------------------------------
+        // LOGIKA CUSTOM ALERT
+        // ---------------------------------------------
+        function showAlert(message, type = 'info', callback = null) {
+            const modal = document.getElementById('custom-alert');
+            const title = document.getElementById('alert-title');
+            const msgEl = document.getElementById('alert-message');
+            const icon = document.getElementById('alert-icon');
+            const iconContainer = document.getElementById('alert-icon-container');
+
+            msgEl.textContent = message;
+
+            if (type === 'success') {
+                title.textContent = 'Berhasil!';
+                icon.className = 'fas fa-check text-green-500';
+                iconContainer.className = 'w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4';
+            } else if (type === 'error') {
+                title.textContent = 'Gagal!';
+                icon.className = 'fas fa-exclamation-triangle text-red-500';
+                iconContainer.className = 'w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4';
+            } else {
+                title.textContent = 'Pemberitahuan';
+                icon.className = 'fas fa-info-circle text-blue-500';
+                iconContainer.className = 'w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4';
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            window.alertCallback = callback;
+        }
+
+        window.closeAlert = function() {
+            const modal = document.getElementById('custom-alert');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            if (window.alertCallback) window.alertCallback();
+        }
+
+        function saveUserSession(uid, status, name) {
+            localStorage.setItem('user_id', uid);
+            localStorage.setItem('user_status', status);
+            localStorage.setItem('user_name', name);
+            // Pakai custom alert alih-alih alert bawaan chrome
+            showAlert(`Selamat datang ${name}! Anda masuk sebagai akun ${status.toUpperCase()}.`, 'success', () => {
+                window.location.href = '/';
+            });
+        }
+
+        // ---------------------------------------------
+        // LOGIKA AUTHENTICATION
+        // ---------------------------------------------
+
+        // 1. Cek Hasil Redirect Login Google
+        getRedirectResult(auth).then((result) => {
+            if (result) {
+                saveUserSession(result.user.uid, 'real', result.user.displayName || result.user.email);
+            }
+        }).catch((error) => {
+            showAlert("Gagal Login dengan Google: " + error.message, 'error');
+        });
+
+        // 2. Handle Login Google (MENGGUNAKAN REDIRECT, bukan popup Chrome)
+        document.getElementById('google-btn').addEventListener('click', () => {
+            signInWithRedirect(auth, googleProvider);
+        });
+
+        // 3. Handle Login Email
+        document.getElementById('login-email-btn').addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if(!email || !password) return showAlert("Harap isi email dan password!", 'error');
+
+            try {
+                const result = await signInWithEmailAndPassword(auth, email, password);
+                saveUserSession(result.user.uid, 'real', result.user.email);
+            } catch (error) {
+                showAlert("Gagal Login: " + error.message, 'error');
+            }
+        });
+
+        // 4. Handle Register Email
+        document.getElementById('register-email-btn').addEventListener('click', async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            if(!email || !password) return showAlert("Harap isi email dan password!", 'error');
+
+            try {
+                const result = await createUserWithEmailAndPassword(auth, email, password);
+                showAlert("Akun berhasil dibuat!", 'success', () => {
+                    saveUserSession(result.user.uid, 'real', result.user.email);
+                });
+            } catch (error) {
+                showAlert("Gagal Pendaftaran: " + error.message, 'error');
+            }
+        });
+
+        // 5. Handle Guest Login
+        document.getElementById('guest-btn').addEventListener('click', () => {
+            const guestId = 'guest_' + Math.random().toString(36).substring(7);
+            saveUserSession(guestId, 'guest', 'Guest User');
+        });
+    </script>
+</body>
+</html>
